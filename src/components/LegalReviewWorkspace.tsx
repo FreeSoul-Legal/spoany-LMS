@@ -3,8 +3,16 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { classifyLegalCase, generateLegalDocument } from "@/lib/legal-review.functions";
-import { DOC_TYPE_LABEL, LEVEL_LABEL, createLegalReview, deriveTitle, saveLegalReviewDocument } from "@/lib/legal-review";
-import type { AnalysisResult, LegalDocType, LegalReviewRow } from "@/lib/legal-review";
+import {
+  DOC_TYPE_LABEL,
+  LEVEL_LABEL,
+  combineInputWithQA,
+  createLegalReview,
+  deriveTitle,
+  saveLegalReviewDocument,
+  toAnalysisResult,
+} from "@/lib/legal-review";
+import type { AnalysisResult, LegalDocType, LegalReviewRow, QAPair } from "@/lib/legal-review";
 
 /** body.printing 클래스가 있을 때 이 포탈 내용만 보이도록 styles.css에서 처리한다. */
 function usePrint() {
@@ -219,12 +227,65 @@ function CaseSection({
   );
 }
 
+function QuestionForm({
+  questions,
+  answers,
+  onChange,
+  onSubmit,
+  submitting,
+}: {
+  questions: string[];
+  answers: string[];
+  onChange: (index: number, value: string) => void;
+  onSubmit: () => void;
+  submitting: boolean;
+}) {
+  return (
+    <section className="no-print rounded-lg border bg-card p-4">
+      <h2 className="text-sm font-semibold">추가 확인이 필요합니다</h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        정확한 판단을 위해 아래 사항을 확인해주세요. 확실하지 않으면 아는 대로만 적어도 괜찮습니다.
+      </p>
+      <div className="mt-4 space-y-4">
+        {questions.map((q, i) => (
+          <div key={i} className="space-y-1.5">
+            <label className="text-sm font-medium">{`${i + 1}. ${q}`}</label>
+            <Textarea rows={2} value={answers[i] ?? ""} onChange={(e) => onChange(i, e.target.value)} />
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 flex justify-end">
+        <Button onClick={onSubmit} disabled={submitting}>
+          {submitting ? "분석 중…" : "답변 제출"}
+        </Button>
+      </div>
+    </section>
+  );
+}
+
 export function LegalReviewWorkspace({ initial }: { initial?: LegalReviewRow }) {
   const [inputText, setInputText] = useState(initial?.input_text ?? "");
   const [review, setReview] = useState<LegalReviewRow | null>(initial ?? null);
   const [analyzing, setAnalyzing] = useState(false);
   const [generating, setGenerating] = useState<Partial<Record<LegalDocType, boolean>>>({});
+  const [qaHistory, setQaHistory] = useState<QAPair[]>([]);
+  const [pendingQuestions, setPendingQuestions] = useState<string[] | null>(null);
+  const [answers, setAnswers] = useState<string[]>([]);
   const { printDoc, portal } = usePrint();
+
+  async function runClassify(qaSoFar: QAPair[], forceComplete: boolean) {
+    const res = await classifyLegalCase({ data: { inputText, qaHistory: qaSoFar, forceComplete } });
+    if (res.status === "need_more_info") {
+      setPendingQuestions(res.questions);
+      setAnswers(res.questions.map(() => ""));
+      return;
+    }
+    const combinedInput = combineInputWithQA(inputText, qaSoFar);
+    const saved = await createLegalReview({ title: deriveTitle(inputText), inputText: combinedInput, analysis: toAnalysisResult(res) });
+    setReview(saved);
+    setPendingQuestions(null);
+    toast.success("사안 분석이 완료되었습니다.");
+  }
 
   async function handleAnalyze() {
     if (inputText.trim().length < 10) {
@@ -233,10 +294,23 @@ export function LegalReviewWorkspace({ initial }: { initial?: LegalReviewRow }) 
     }
     setAnalyzing(true);
     try {
-      const analysis = await classifyLegalCase({ data: { inputText } });
-      const saved = await createLegalReview({ title: deriveTitle(inputText), inputText, analysis });
-      setReview(saved);
-      toast.success("사안 분석이 완료되었습니다.");
+      await runClassify([], false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "분석에 실패했습니다.");
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
+  async function handleAnswerSubmit() {
+    if (!pendingQuestions) return;
+    const newQa = pendingQuestions.map((q, i) => ({ question: q, answer: answers[i]?.trim() || "확인되지 않음" }));
+    const combined = [...qaHistory, ...newQa];
+    setAnalyzing(true);
+    try {
+      // 한 차례 답변을 받은 뒤에는 추가 질문 없이 최종 판단하도록 요청한다.
+      await runClassify(combined, true);
+      setQaHistory(combined);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "분석에 실패했습니다.");
     } finally {
@@ -264,6 +338,9 @@ export function LegalReviewWorkspace({ initial }: { initial?: LegalReviewRow }) 
   function reset() {
     setReview(null);
     setInputText("");
+    setQaHistory([]);
+    setPendingQuestions(null);
+    setAnswers([]);
   }
 
   return (
@@ -276,21 +353,31 @@ export function LegalReviewWorkspace({ initial }: { initial?: LegalReviewRow }) 
           onChange={(e) => setInputText(e.target.value)}
           placeholder="직영점/부서에서 검토를 요청한 사안의 경위, 관련자, 일시, 손해 내용 등을 육하원칙에 따라 최대한 구체적으로 입력해주세요."
           className="mt-2"
-          disabled={!!review}
+          disabled={!!review || !!pendingQuestions}
         />
         <div className="mt-3 flex justify-end gap-2">
-          {review && (
+          {(review || pendingQuestions) && (
             <Button variant="outline" size="sm" onClick={reset}>
               새 사안 검토
             </Button>
           )}
-          {!review && (
+          {!review && !pendingQuestions && (
             <Button onClick={handleAnalyze} disabled={analyzing}>
               {analyzing ? "분석 중…" : "사안 분석하기"}
             </Button>
           )}
         </div>
       </section>
+
+      {pendingQuestions && !review && (
+        <QuestionForm
+          questions={pendingQuestions}
+          answers={answers}
+          onChange={(i, v) => setAnswers((a) => a.map((x, idx) => (idx === i ? v : x)))}
+          onSubmit={handleAnswerSubmit}
+          submitting={analyzing}
+        />
+      )}
 
       {review?.analysis && (
         <>

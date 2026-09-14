@@ -94,15 +94,30 @@ export const analysisResultSchema = z.object({
 
 export type AnalysisResult = z.infer<typeof analysisResultSchema>;
 
+export type QAPair = { question: string; answer: string };
+
+const classifyResponseSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("need_more_info"), questions: z.array(z.string().min(1)).min(1).max(4) }),
+  z.object({ status: z.literal("complete") }).extend(analysisResultSchema.shape),
+]);
+
+export type ClassifyResponse = z.infer<typeof classifyResponseSchema>;
+
 const CLASSIFY_SYSTEM = `당신은 15년 이상 경력의 대한민국 법률전문가입니다. 회사(헬스장 직영점 및 본사 각 부서)에서 검토를 요청한 사안을 분석합니다.
 다음 원칙을 지키세요.
 - 결론을 먼저 명확히 제시하고, 근거는 간결하게 제시합니다.
 - 격식 있는 문어체를 사용하고 반말을 쓰지 않습니다.
-- 제공된 사실관계만으로 단정하기 어려운 부분은 "추가 확인이 필요하다"는 취지로 명시합니다.
-- 반드시 아래 JSON 스키마와 정확히 동일한 구조의 JSON만 출력합니다. 다른 설명, 인사말, 코드펜스 표시(\`\`\`)를 포함하지 마세요.
+- 반드시 아래 두 JSON 스키마 중 하나와 정확히 동일한 구조의 JSON만 출력합니다. 다른 설명, 인사말, 코드펜스 표시(\`\`\`)를 포함하지 마세요.
 
-JSON 스키마:
+1) 제공된 사실관계만으로는 처벌·승소 가능성을 판단하기에 결정적으로 부족한 경우(예: 발언·행위가 있었던 장소/공연성 여부, 목격자·전달 범위, 발생 시기, 당사자 간 관계, 손해 규모 등 핵심 요건 사실이 빠진 경우)에는 아래 "질문형" JSON만 출력하여 최대 4개의 구체적이고 답하기 쉬운 질문을 하세요.
 {
+  "status": "need_more_info",
+  "questions": string[]   // 판단에 결정적으로 필요한 사실관계를 확인하는 질문들. 이미 답변된 내용은 다시 묻지 마세요.
+}
+
+2) 판단하기에 충분한 정보가 있으면(또는 더 이상 질문해도 새로운 정보를 얻기 어려우면) 아래 "완료형" JSON을 출력하세요. 이때도 여전히 불확실한 부분은 explanation에 "추가 확인이 필요하다"는 취지로 명시하세요.
+{
+  "status": "complete",
   "summary": string,               // 사안을 1~2문장으로 요약
   "caseTypes": {
     "criminal": boolean,           // 형사사건으로 진행 가능/검토 실익이 있는지
@@ -125,14 +140,35 @@ JSON 스키마:
   } | null
 }`;
 
+function buildCaseMessage(inputText: string, qaHistory: QAPair[], forceComplete: boolean) {
+  let content = `검토 요청 사안:\n\n${inputText}`;
+  if (qaHistory.length > 0) {
+    content += `\n\n[추가 확인 사항]\n${qaHistory.map((qa) => `Q: ${qa.question}\nA: ${qa.answer}`).join("\n\n")}`;
+  }
+  if (forceComplete) {
+    content += `\n\n(안내: 이미 한 차례 추가 질문을 드렸습니다. 지금까지 확인된 사실관계만으로 반드시 "complete" 상태의 최종 판단을 내려주세요. 더 이상 질문하지 마세요.)`;
+  }
+  return content;
+}
+
 export const classifyLegalCase = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((data: unknown) => z.object({ inputText: z.string().min(10).max(8000) }).parse(data))
+  .validator((data: unknown) =>
+    z
+      .object({
+        inputText: z.string().min(10).max(8000),
+        qaHistory: z.array(z.object({ question: z.string(), answer: z.string() })).max(8).default([]),
+        forceComplete: z.boolean().default(false),
+      })
+      .parse(data),
+  )
   .handler(async ({ data, context }) => {
     assertAllowed(context.claims);
 
-    const text = await callClaude(CLASSIFY_SYSTEM, [{ role: "user", content: `검토 요청 사안:\n\n${data.inputText}` }]);
-    return analysisResultSchema.parse(extractJson(text));
+    const text = await callClaude(CLASSIFY_SYSTEM, [
+      { role: "user", content: buildCaseMessage(data.inputText, data.qaHistory, data.forceComplete) },
+    ]);
+    return classifyResponseSchema.parse(extractJson(text));
   });
 
 export type LegalDocType = "criminal_report" | "civil_report" | "criminal_complaint" | "civil_complaint" | "content_cert";

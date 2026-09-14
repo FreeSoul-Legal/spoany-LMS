@@ -1,7 +1,20 @@
 import { supabase } from "@/lib/supabase/client";
-import type { AnalysisResult, LegalDocType } from "@/lib/legal-review.functions";
+import type { AnalysisResult, ClassifyResponse, LegalDocType, QAPair } from "@/lib/legal-review.functions";
 
-export type { AnalysisResult, LegalDocType };
+export type { AnalysisResult, ClassifyResponse, LegalDocType, QAPair };
+
+/** classify 완료 응답에서 상태 판별용 필드를 제외한 AnalysisResult만 추출한다. */
+export function toAnalysisResult(res: Extract<ClassifyResponse, { status: "complete" }>): AnalysisResult {
+  const { status: _status, ...analysis } = res;
+  return analysis;
+}
+
+/** 원본 사안 설명 + 추가 확인 질문/답변을 하나의 텍스트로 합친다(저장·서면 작성에 사용). */
+export function combineInputWithQA(inputText: string, qaHistory: QAPair[]) {
+  if (qaHistory.length === 0) return inputText;
+  const qaText = qaHistory.map((qa) => `Q: ${qa.question}\nA: ${qa.answer}`).join("\n\n");
+  return `${inputText}\n\n[추가 확인 사항]\n${qaText}`;
+}
 
 export type LegalDocuments = Partial<Record<LegalDocType, string>>;
 
