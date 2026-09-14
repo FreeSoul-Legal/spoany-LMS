@@ -1,18 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { requireSupabaseAuth } from "@/lib/supabase/auth-middleware";
-
-// 이 도구는 담당자 1인 전용이다. DB 쪽 RLS로도 동일하게 막혀 있지만,
-// AI 호출(=비용 발생 지점)에서도 이중으로 방어한다.
-export const ALLOWED_EMAIL = "zzang9kim@gmail.com";
-
-function assertAllowed(claims: unknown) {
-  const email =
-    claims && typeof claims === "object" && "email" in claims && typeof claims.email === "string" ? claims.email : undefined;
-  if (email !== ALLOWED_EMAIL) {
-    throw new Error("이 기능은 담당자 계정에서만 사용할 수 있습니다.");
-  }
-}
+import type { LegalDocuments } from "@/lib/legal-review";
 
 type ClaudeMessage = { role: "user" | "assistant"; content: string };
 
@@ -152,7 +140,6 @@ function buildCaseMessage(inputText: string, qaHistory: QAPair[], forceComplete:
 }
 
 export const classifyLegalCase = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .validator((data: unknown) =>
     z
       .object({
@@ -162,9 +149,7 @@ export const classifyLegalCase = createServerFn({ method: "POST" })
       })
       .parse(data),
   )
-  .handler(async ({ data, context }) => {
-    assertAllowed(context.claims);
-
+  .handler(async ({ data }) => {
     const text = await callClaude(CLASSIFY_SYSTEM, [
       { role: "user", content: buildCaseMessage(data.inputText, data.qaHistory, data.forceComplete) },
     ]);
@@ -191,7 +176,6 @@ const DOC_INSTRUCTIONS: Record<LegalDocType, string> = {
 };
 
 export const generateLegalDocument = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .validator((data: unknown) =>
     z
       .object({
@@ -201,9 +185,7 @@ export const generateLegalDocument = createServerFn({ method: "POST" })
       })
       .parse(data),
   )
-  .handler(async ({ data, context }) => {
-    assertAllowed(context.claims);
-
+  .handler(async ({ data }) => {
     const system = `당신은 15년 이상 경력의 대한민국 법률전문가입니다. 아래 사안과 사전 분석 결과를 토대로 회사 내부 검토 및 제출용 문서를 작성합니다.
 격식 있는 문어체를 사용하고 반말을 쓰지 마세요. 결과는 문서 본문 텍스트만 출력하고, 그 외의 설명·인사말·코드펜스는 포함하지 마세요.
 
@@ -220,4 +202,81 @@ ${DOC_INSTRUCTIONS[data.docType]}`;
       4096,
     );
     return { content };
+  });
+
+// ---------------------------------------------------------------------------
+// DB 접근 (서비스 롤 키 사용, RLS 우회). 로그인 화면이 없는 단일 사용자 도구이므로
+// 데이터베이스 읽기/쓰기는 전부 서버 함수를 통해서만 이루어진다.
+// ---------------------------------------------------------------------------
+
+const SELECT_COLUMNS = "id, title, input_text, analysis, documents, created_at, updated_at";
+
+export const listLegalReviews = createServerFn({ method: "GET" }).handler(async () => {
+  const { supabaseAdmin } = await import("@/lib/supabase/admin-client.server");
+  const { data, error } = await supabaseAdmin.from("legal_reviews").select(SELECT_COLUMNS).order("created_at", { ascending: false });
+  if (error) throw error;
+  return data;
+});
+
+export const getLegalReview = createServerFn({ method: "GET" })
+  .validator((data: unknown) => z.object({ id: z.string().uuid() }).parse(data))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/lib/supabase/admin-client.server");
+    const { data: row, error } = await supabaseAdmin.from("legal_reviews").select(SELECT_COLUMNS).eq("id", data.id).maybeSingle();
+    if (error) throw error;
+    return row;
+  });
+
+export const insertLegalReview = createServerFn({ method: "POST" })
+  .validator((data: unknown) =>
+    z.object({ title: z.string(), inputText: z.string(), analysis: analysisResultSchema }).parse(data),
+  )
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/lib/supabase/admin-client.server");
+    const { data: row, error } = await supabaseAdmin
+      .from("legal_reviews")
+      .insert({ title: data.title, input_text: data.inputText, analysis: data.analysis })
+      .select(SELECT_COLUMNS)
+      .single();
+    if (error) throw error;
+    return row;
+  });
+
+export const updateLegalReviewDocument = createServerFn({ method: "POST" })
+  .validator((data: unknown) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        docType: z.enum(["criminal_report", "civil_report", "criminal_complaint", "civil_complaint", "content_cert"]),
+        content: z.string(),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/lib/supabase/admin-client.server");
+    const { data: current, error: fetchError } = await supabaseAdmin
+      .from("legal_reviews")
+      .select("documents")
+      .eq("id", data.id)
+      .single();
+    if (fetchError) throw fetchError;
+    const documents: LegalDocuments = { ...current.documents, [data.docType]: data.content };
+
+    const { data: row, error } = await supabaseAdmin
+      .from("legal_reviews")
+      .update({ documents })
+      .eq("id", data.id)
+      .select(SELECT_COLUMNS)
+      .single();
+    if (error) throw error;
+    return row;
+  });
+
+export const removeLegalReview = createServerFn({ method: "POST" })
+  .validator((data: unknown) => z.object({ id: z.string().uuid() }).parse(data))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/lib/supabase/admin-client.server");
+    const { error } = await supabaseAdmin.from("legal_reviews").delete().eq("id", data.id);
+    if (error) throw error;
+    return { success: true };
   });

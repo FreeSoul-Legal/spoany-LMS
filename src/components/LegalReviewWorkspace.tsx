@@ -2,16 +2,8 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { classifyLegalCase, generateLegalDocument } from "@/lib/legal-review.functions";
-import {
-  DOC_TYPE_LABEL,
-  LEVEL_LABEL,
-  combineInputWithQA,
-  createLegalReview,
-  deriveTitle,
-  saveLegalReviewDocument,
-  toAnalysisResult,
-} from "@/lib/legal-review";
+import { classifyLegalCase, generateLegalDocument, insertLegalReview, updateLegalReviewDocument } from "@/lib/legal-review.functions";
+import { DOC_TYPE_LABEL, LEVEL_LABEL, combineInputWithQA, deriveTitle, toAnalysisResult } from "@/lib/legal-review";
 import type { AnalysisResult, LegalDocType, LegalReviewRow, QAPair } from "@/lib/legal-review";
 
 /** body.printing 클래스가 있을 때 이 포탈 내용만 보이도록 styles.css에서 처리한다. */
@@ -281,7 +273,9 @@ export function LegalReviewWorkspace({ initial }: { initial?: LegalReviewRow }) 
       return;
     }
     const combinedInput = combineInputWithQA(inputText, qaSoFar);
-    const saved = await createLegalReview({ title: deriveTitle(inputText), inputText: combinedInput, analysis: toAnalysisResult(res) });
+    const saved = await insertLegalReview({
+      data: { title: deriveTitle(inputText), inputText: combinedInput, analysis: toAnalysisResult(res) },
+    });
     setReview(saved);
     setPendingQuestions(null);
     toast.success("사안 분석이 완료되었습니다.");
@@ -325,7 +319,7 @@ export function LegalReviewWorkspace({ initial }: { initial?: LegalReviewRow }) 
       const { content } = await generateLegalDocument({
         data: { inputText: review.input_text, analysis: review.analysis, docType },
       });
-      const updated = await saveLegalReviewDocument(review.id, docType, content, review.documents);
+      const updated = await updateLegalReviewDocument({ data: { id: review.id, docType, content } });
       setReview(updated);
       toast.success(`${DOC_TYPE_LABEL[docType]} 작성이 완료되었습니다.`);
     } catch (err) {

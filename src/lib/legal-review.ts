@@ -1,26 +1,11 @@
-import { supabase } from "@/lib/supabase/client";
 import type { AnalysisResult, ClassifyResponse, LegalDocType, QAPair } from "@/lib/legal-review.functions";
 
 export type { AnalysisResult, ClassifyResponse, LegalDocType, QAPair };
-
-/** classify 완료 응답에서 상태 판별용 필드를 제외한 AnalysisResult만 추출한다. */
-export function toAnalysisResult(res: Extract<ClassifyResponse, { status: "complete" }>): AnalysisResult {
-  const { status: _status, ...analysis } = res;
-  return analysis;
-}
-
-/** 원본 사안 설명 + 추가 확인 질문/답변을 하나의 텍스트로 합친다(저장·서면 작성에 사용). */
-export function combineInputWithQA(inputText: string, qaHistory: QAPair[]) {
-  if (qaHistory.length === 0) return inputText;
-  const qaText = qaHistory.map((qa) => `Q: ${qa.question}\nA: ${qa.answer}`).join("\n\n");
-  return `${inputText}\n\n[추가 확인 사항]\n${qaText}`;
-}
 
 export type LegalDocuments = Partial<Record<LegalDocType, string>>;
 
 export type LegalReviewRow = {
   id: string;
-  user_id: string;
   title: string;
   input_text: string;
   analysis: AnalysisResult | null;
@@ -56,40 +41,17 @@ export function deriveTitle(inputText: string) {
   return t.length > 40 ? `${t.slice(0, 40)}…` : t || "제목 없음";
 }
 
-const SELECT_COLUMNS = "id, user_id, title, input_text, analysis, documents, created_at, updated_at";
-
-export async function fetchLegalReviews() {
-  const { data, error } = await supabase.from("legal_reviews").select(SELECT_COLUMNS).order("created_at", { ascending: false });
-  if (error) throw error;
-  return data as LegalReviewRow[];
+/** classify 완료 응답에서 상태 판별용 필드를 제외한 AnalysisResult만 추출한다. */
+export function toAnalysisResult(res: Extract<ClassifyResponse, { status: "complete" }>): AnalysisResult {
+  const { status: _status, ...analysis } = res;
+  return analysis;
 }
 
-export async function fetchLegalReview(id: string) {
-  const { data, error } = await supabase.from("legal_reviews").select(SELECT_COLUMNS).eq("id", id).maybeSingle();
-  if (error) throw error;
-  return data;
-}
-
-export async function createLegalReview(input: { title: string; inputText: string; analysis: AnalysisResult }) {
-  const { data, error } = await supabase
-    .from("legal_reviews")
-    .insert({ title: input.title, input_text: input.inputText, analysis: input.analysis })
-    .select(SELECT_COLUMNS)
-    .single();
-  if (error) throw error;
-  return data;
-}
-
-export async function saveLegalReviewDocument(id: string, docType: LegalDocType, content: string, current: LegalDocuments) {
-  const documents = { ...current, [docType]: content };
-  const { data, error } = await supabase.from("legal_reviews").update({ documents }).eq("id", id).select(SELECT_COLUMNS).single();
-  if (error) throw error;
-  return data;
-}
-
-export async function deleteLegalReview(id: string) {
-  const { error } = await supabase.from("legal_reviews").delete().eq("id", id);
-  if (error) throw error;
+/** 원본 사안 설명 + 추가 확인 질문/답변을 하나의 텍스트로 합친다(저장·서면 작성에 사용). */
+export function combineInputWithQA(inputText: string, qaHistory: QAPair[]) {
+  if (qaHistory.length === 0) return inputText;
+  const qaText = qaHistory.map((qa) => `Q: ${qa.question}\nA: ${qa.answer}`).join("\n\n");
+  return `${inputText}\n\n[추가 확인 사항]\n${qaText}`;
 }
 
 export function fmtDateTime(v: string) {
