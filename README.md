@@ -17,6 +17,7 @@
 ## 기술 스택
 
 - TanStack Start (React, SSR, 서버 함수) + TanStack Router + TanStack Query
+- Nitro — 어떤 Node 호환 호스팅에도 배포 가능한 범용 서버 어댑터
 - Supabase Postgres — spoany-cms와 같은 프로젝트를 재사용 (서버 함수에서 서비스 롤 키로만 접근)
 - Claude API (Anthropic) — 서버 함수에서 직접 호출
 - Tailwind CSS
@@ -50,11 +51,20 @@ bun run dev
 
 기본적으로 http://localhost:3000 에서 바로 사용할 수 있습니다(로그인 불필요).
 
-## 빌드
+## 빌드 및 배포 (Nitro)
+
+이 프로젝트는 Nitro를 범용 서버 어댑터로 사용하므로, Node를 지원하는 어떤 호스팅에도 배포할 수 있습니다.
 
 ```bash
 bun run build
+node dist/server/index.mjs
 ```
+
+빌드 결과물은 독립적으로 실행되는 Node 서버입니다. 배포하려면 `dist/` 디렉터리를 호스팅 환경(Render, Fly.io,
+자체 VPS 등)에 올리고 위 실행 명령을 실행하면 됩니다. 이때도 위 환경변수(`SUPABASE_URL`,
+`SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`)를 호스팅 플랫폼에 등록해야 합니다.
+
+Vercel/Netlify/Cloudflare/AWS Lambda 등 특정 플랫폼 전용 설정이 필요하면 https://v3.nitro.build/deploy 를 참고하세요.
 
 ## 배포 시 참고
 

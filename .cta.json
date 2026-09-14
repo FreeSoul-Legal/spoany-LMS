@@ -6,16 +6,18 @@
   "packageManager": "bun",
   "git": false,
   "install": true,
-  "intent": true,
+  "intent": false,
   "addOnOptions": {},
   "projectPreset": "default",
   "includeExamples": true,
   "routerOnly": false,
   "version": 1,
+  "addOns": true,
   "framework": "react",
   "chosenAddOns": [
     "shadcn",
     "tanstack-query",
-    "eslint"
+    "eslint",
+    "nitro"
   ]
 }
