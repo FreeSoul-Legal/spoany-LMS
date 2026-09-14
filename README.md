@@ -1,0 +1,53 @@
+# 사안 검토 시스템 (spoany-LMS)
+
+직영점(헬스장)이나 본사 각 부서에서 검토를 요청한 사안을 입력하면, AI(Claude)가 형사·민사 진행 가능성을 분석하고
+필요한 보고서·서면(고소장/소장/내용증명) 초안을 작성해주는 사내 법률 검토 도구입니다.
+
+담당자 1인 전용 도구로, `zzang9kim@gmail.com` 계정으로만 로그인·이용할 수 있습니다.
+
+## 기능
+
+1. 사안 입력 → 형사/민사 해당 여부 판단
+2. 형사: 처벌가능성(높음/다툼의 여지/낮음) 체크 + 사실관계·죄명및근거·설명 표시 → 보고서 작성/인쇄 → (높음일 때) 고소장 작성
+3. 민사: 승소가능성(높음/다툼의 여지/낮음) 체크 + 사실관계·근거·설명 표시 → 보고서 작성/인쇄 → (높음일 때) 소장/내용증명 작성
+4. 분석·서면 이력은 저장되어 `/history`에서 다시 확인 가능
+
+## 기술 스택
+
+- TanStack Start (React, SSR, 서버 함수) + TanStack Router + TanStack Query
+- Supabase (Auth + Postgres) — spoany-cms와 같은 프로젝트를 재사용
+- Claude API (Anthropic) — 서버 함수에서 직접 호출
+- Tailwind CSS
+
+## 환경변수 설정
+
+`.env.example`을 복사해 `.env`를 만들고 값을 채워주세요.
+
+```bash
+cp .env.example .env
+```
+
+- `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY` / `VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLISHABLE_KEY`: Supabase 프로젝트 설정(Project Settings → API)에서 확인 (spoany-cms와 동일 프로젝트 사용 시 그 값 그대로 사용)
+- `ANTHROPIC_API_KEY`: Claude API 키. https://console.anthropic.com 에서 발급
+
+배포 환경(호스팅 플랫폼)에도 동일한 환경변수를 등록해야 합니다.
+
+## 데이터베이스 준비
+
+`supabase/migrations/0001_legal_reviews.sql`을 Supabase 대시보드의 SQL Editor에서 실행하거나,
+Supabase CLI가 연결되어 있다면 `supabase db push`로 적용하세요.
+
+이 테이블은 RLS로 `zzang9kim@gmail.com` 계정에서만 접근 가능하도록 제한되어 있습니다.
+
+## 로컬 실행
+
+```bash
+bun install
+bun run dev
+```
+
+## 빌드
+
+```bash
+bun run build
+```
