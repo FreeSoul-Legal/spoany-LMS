@@ -1,6 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import type { LegalDocuments } from "@/lib/legal-review";
 
 type ClaudeMessage = { role: "user" | "assistant"; content: string };
 
@@ -202,81 +201,4 @@ ${DOC_INSTRUCTIONS[data.docType]}`;
       4096,
     );
     return { content };
-  });
-
-// ---------------------------------------------------------------------------
-// DB 접근 (서비스 롤 키 사용, RLS 우회). 로그인 화면이 없는 단일 사용자 도구이므로
-// 데이터베이스 읽기/쓰기는 전부 서버 함수를 통해서만 이루어진다.
-// ---------------------------------------------------------------------------
-
-const SELECT_COLUMNS = "id, title, input_text, analysis, documents, created_at, updated_at";
-
-export const listLegalReviews = createServerFn({ method: "GET" }).handler(async () => {
-  const { supabaseAdmin } = await import("@/lib/supabase/admin-client.server");
-  const { data, error } = await supabaseAdmin.from("legal_reviews").select(SELECT_COLUMNS).order("created_at", { ascending: false });
-  if (error) throw error;
-  return data;
-});
-
-export const getLegalReview = createServerFn({ method: "GET" })
-  .validator((data: unknown) => z.object({ id: z.string().uuid() }).parse(data))
-  .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/lib/supabase/admin-client.server");
-    const { data: row, error } = await supabaseAdmin.from("legal_reviews").select(SELECT_COLUMNS).eq("id", data.id).maybeSingle();
-    if (error) throw error;
-    return row;
-  });
-
-export const insertLegalReview = createServerFn({ method: "POST" })
-  .validator((data: unknown) =>
-    z.object({ title: z.string(), inputText: z.string(), analysis: analysisResultSchema }).parse(data),
-  )
-  .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/lib/supabase/admin-client.server");
-    const { data: row, error } = await supabaseAdmin
-      .from("legal_reviews")
-      .insert({ title: data.title, input_text: data.inputText, analysis: data.analysis })
-      .select(SELECT_COLUMNS)
-      .single();
-    if (error) throw error;
-    return row;
-  });
-
-export const updateLegalReviewDocument = createServerFn({ method: "POST" })
-  .validator((data: unknown) =>
-    z
-      .object({
-        id: z.string().uuid(),
-        docType: z.enum(["criminal_report", "civil_report", "criminal_complaint", "civil_complaint", "content_cert"]),
-        content: z.string(),
-      })
-      .parse(data),
-  )
-  .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/lib/supabase/admin-client.server");
-    const { data: current, error: fetchError } = await supabaseAdmin
-      .from("legal_reviews")
-      .select("documents")
-      .eq("id", data.id)
-      .single();
-    if (fetchError) throw fetchError;
-    const documents: LegalDocuments = { ...current.documents, [data.docType]: data.content };
-
-    const { data: row, error } = await supabaseAdmin
-      .from("legal_reviews")
-      .update({ documents })
-      .eq("id", data.id)
-      .select(SELECT_COLUMNS)
-      .single();
-    if (error) throw error;
-    return row;
-  });
-
-export const removeLegalReview = createServerFn({ method: "POST" })
-  .validator((data: unknown) => z.object({ id: z.string().uuid() }).parse(data))
-  .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/lib/supabase/admin-client.server");
-    const { error } = await supabaseAdmin.from("legal_reviews").delete().eq("id", data.id);
-    if (error) throw error;
-    return { success: true };
   });

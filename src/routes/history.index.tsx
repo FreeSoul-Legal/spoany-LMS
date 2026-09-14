@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { listLegalReviews } from "@/lib/legal-review.functions";
-import { fmtDateTime } from "@/lib/legal-review";
+import { fetchLegalReviews, fmtDateTime } from "@/lib/legal-review";
 import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
 
@@ -16,7 +15,7 @@ export const Route = createFileRoute("/history/")({
 });
 
 function HistoryListPage() {
-  const { data: reviews, isLoading } = useQuery({ queryKey: ["legal-reviews"], queryFn: () => listLegalReviews() });
+  const { data: reviews, isLoading } = useQuery({ queryKey: ["legal-reviews"], queryFn: fetchLegalReviews });
 
   return (
     <div className="min-h-screen bg-muted/60">

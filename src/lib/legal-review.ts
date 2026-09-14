@@ -1,3 +1,4 @@
+import { supabase } from "@/lib/supabase/client";
 import type { AnalysisResult, ClassifyResponse, LegalDocType, QAPair } from "@/lib/legal-review.functions";
 
 export type { AnalysisResult, ClassifyResponse, LegalDocType, QAPair };
@@ -57,4 +58,40 @@ export function combineInputWithQA(inputText: string, qaHistory: QAPair[]) {
 export function fmtDateTime(v: string) {
   const d = new Date(v);
   return d.toLocaleString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+const SELECT_COLUMNS = "id, title, input_text, analysis, documents, created_at, updated_at";
+
+export async function fetchLegalReviews() {
+  const { data, error } = await supabase.from("legal_reviews").select(SELECT_COLUMNS).order("created_at", { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function fetchLegalReview(id: string) {
+  const { data, error } = await supabase.from("legal_reviews").select(SELECT_COLUMNS).eq("id", id).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function createLegalReview(input: { title: string; inputText: string; analysis: AnalysisResult }) {
+  const { data, error } = await supabase
+    .from("legal_reviews")
+    .insert({ title: input.title, input_text: input.inputText, analysis: input.analysis })
+    .select(SELECT_COLUMNS)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function saveLegalReviewDocument(id: string, docType: LegalDocType, content: string, current: LegalDocuments) {
+  const documents = { ...current, [docType]: content };
+  const { data, error } = await supabase.from("legal_reviews").update({ documents }).eq("id", id).select(SELECT_COLUMNS).single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteLegalReview(id: string) {
+  const { error } = await supabase.from("legal_reviews").delete().eq("id", id);
+  if (error) throw error;
 }

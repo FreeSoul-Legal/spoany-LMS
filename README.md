@@ -18,7 +18,7 @@
 
 - TanStack Start (React, SSR, 서버 함수) + TanStack Router + TanStack Query
 - Nitro — 어떤 Node 호환 호스팅에도 배포 가능한 범용 서버 어댑터
-- Supabase Postgres — spoany-cms와 같은 프로젝트를 재사용 (서버 함수에서 서비스 롤 키로만 접근)
+- Supabase Postgres — spoany-cms와 같은 프로젝트를 재사용 (브라우저에서 공개용 publishable 키로 직접 접근)
 - Claude API (Anthropic) — 서버 함수에서 직접 호출
 - Tailwind CSS
 
@@ -30,9 +30,9 @@
 cp .env.example .env
 ```
 
-- `SUPABASE_URL`: Supabase 프로젝트 설정(Project Settings → API)에서 확인 (spoany-cms와 동일 프로젝트 사용 시 그 값 그대로 사용)
-- `SUPABASE_SERVICE_ROLE_KEY`: 같은 화면(Project Settings → API)의 **service_role** 키. `anon`/`publishable` 키가 아니라
-  RLS를 우회하는 비밀 키이므로, 절대 외부에 노출하거나 클라이언트 코드에 넣지 마세요.
+- `VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLISHABLE_KEY`: Supabase 프로젝트 설정(Project Settings → API)에서 확인.
+  spoany-cms의 `.env`에 있는 `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY` 값을 그대로 쓰면 됩니다. (Lovable Cloud를
+  쓰는 경우 `service_role` 키는 UI에 노출되지 않고 필요하지도 않습니다 — 이 두 공개용 키만 있으면 됩니다.)
 - `ANTHROPIC_API_KEY`: Claude API 키. https://console.anthropic.com 에서 발급
 
 배포 환경(호스팅 플랫폼)에도 동일한 환경변수를 등록해야 합니다.
@@ -57,19 +57,19 @@ bun run dev
 
 ```bash
 bun run build
-node dist/server/index.mjs
+node .output/server/index.mjs
 ```
 
-빌드 결과물은 독립적으로 실행되는 Node 서버입니다. 배포하려면 `dist/` 디렉터리를 호스팅 환경(Render, Fly.io,
-자체 VPS 등)에 올리고 위 실행 명령을 실행하면 됩니다. 이때도 위 환경변수(`SUPABASE_URL`,
-`SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`)를 호스팅 플랫폼에 등록해야 합니다.
+빌드 결과물은 독립적으로 실행되는 Node 서버입니다. 배포하려면 `.output/` 디렉터리를 호스팅 환경(Render, Fly.io,
+자체 VPS 등)에 올리고 위 실행 명령을 실행하면 됩니다. 이때도 위 환경변수(`VITE_SUPABASE_URL`,
+`VITE_SUPABASE_PUBLISHABLE_KEY`, `ANTHROPIC_API_KEY`)를 호스팅 플랫폼에 등록해야 합니다.
 
 Vercel/Netlify/Cloudflare/AWS Lambda 등 특정 플랫폼 전용 설정이 필요하면 https://v3.nitro.build/deploy 를 참고하세요.
 
 ## 배포 시 참고
 
-로그인이 없으므로, 이 앱의 URL을 아는 사람은 누구나 사용할 수 있고 그때마다 Claude API 비용이 발생합니다.
-외부에 공개 배포한다면 아래 중 하나를 함께 고려하세요.
+로그인이 없고 데이터베이스도 anon 키로 완전히 열려 있으므로, 이 앱의 URL을 아는 사람은 누구나 사용·조회할 수 있고
+그때마다 Claude API 비용이 발생합니다. 외부에 공개 배포한다면 아래 중 하나를 함께 고려하세요.
 
 - 호스팅 플랫폼(Vercel/Cloudflare 등)의 비밀번호 보호·접근 제한 기능 사용
 - URL을 공유하지 않고 본인만 아는 상태로 유지

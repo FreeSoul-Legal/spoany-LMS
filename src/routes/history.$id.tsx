@@ -1,8 +1,7 @@
 import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { getLegalReview, removeLegalReview } from "@/lib/legal-review.functions";
-import { fmtDateTime } from "@/lib/legal-review";
+import { fetchLegalReview, deleteLegalReview, fmtDateTime } from "@/lib/legal-review";
 import { AppHeader } from "@/components/AppHeader";
 import { LegalReviewWorkspace } from "@/components/LegalReviewWorkspace";
 import { Button } from "@/components/ui/button";
@@ -17,7 +16,7 @@ function HistoryDetailPage() {
   const navigate = useNavigate();
   const { data: review, isLoading } = useQuery({
     queryKey: ["legal-review", id],
-    queryFn: () => getLegalReview({ data: { id } }),
+    queryFn: () => fetchLegalReview(id),
   });
 
   if (isLoading) return <main className="p-10 text-center text-muted-foreground">불러오는 중…</main>;
@@ -38,7 +37,7 @@ function HistoryDetailPage() {
   async function remove() {
     if (!confirm("이 검토 이력을 삭제하시겠습니까? 되돌릴 수 없습니다.")) return;
     try {
-      await removeLegalReview({ data: { id } });
+      await deleteLegalReview(id);
       toast.success("삭제되었습니다.");
       navigate({ to: "/history" });
     } catch {
