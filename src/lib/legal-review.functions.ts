@@ -149,9 +149,13 @@ export const classifyLegalCase = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data }) => {
-    const text = await callClaude(CLASSIFY_SYSTEM, [
-      { role: "user", content: buildCaseMessage(data.inputText, data.qaHistory, data.forceComplete) },
-    ]);
+    // 형사·민사를 함께 판단하고 사실관계·근거·설명을 모두 채우면 분량이 길어질 수 있어
+    // 기본값(4096)보다 넉넉하게 잡는다. 실제로 쓴 만큼만 과금되므로 상한을 올려도 비용 부담은 없다.
+    const text = await callClaude(
+      CLASSIFY_SYSTEM,
+      [{ role: "user", content: buildCaseMessage(data.inputText, data.qaHistory, data.forceComplete) }],
+      8000,
+    );
     try {
       return classifyResponseSchema.parse(extractJson(text));
     } catch (err) {
@@ -206,7 +210,7 @@ ${DOC_INSTRUCTIONS[data.docType]}`;
           content: `[검토 요청 사안 원문]\n${data.inputText}\n\n[사전 분석 결과(JSON)]\n${JSON.stringify(data.analysis, null, 2)}`,
         },
       ],
-      4096,
+      8000,
     );
     return { content };
   });
