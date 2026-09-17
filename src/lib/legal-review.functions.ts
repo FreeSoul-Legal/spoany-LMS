@@ -152,7 +152,15 @@ export const classifyLegalCase = createServerFn({ method: "POST" })
     const text = await callClaude(CLASSIFY_SYSTEM, [
       { role: "user", content: buildCaseMessage(data.inputText, data.qaHistory, data.forceComplete) },
     ]);
-    return classifyResponseSchema.parse(extractJson(text));
+    try {
+      return classifyResponseSchema.parse(extractJson(text));
+    } catch (err) {
+      // 스키마 검증 실패(ZodError 등)는 서버-클라이언트 경계를 넘으면서 원래
+      // 타입 정보가 유실될 수 있으므로, 항상 평범한 Error로 다시 던져 메시지가
+      // 화면까지 확실히 전달되게 한다.
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new Error(`AI 응답을 해석하지 못했습니다: ${detail}`);
+    }
   });
 
 export type LegalDocType = "criminal_report" | "civil_report" | "criminal_complaint" | "civil_complaint" | "content_cert";

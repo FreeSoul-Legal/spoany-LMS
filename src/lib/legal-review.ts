@@ -3,6 +3,19 @@ import type { AnalysisResult, ClassifyResponse, LegalDocType, QAPair } from "@/l
 
 export type { AnalysisResult, ClassifyResponse, LegalDocType, QAPair };
 
+/**
+ * 서버 함수(RPC)를 넘어온 에러는 `instanceof Error`가 항상 참이라는 보장이 없다
+ * (직렬화 과정에서 프로토타입 체인이 유지되지 않는 경우가 있다). instanceof 대신
+ * message 속성 유무만 구조적으로 확인해 실제 원인 메시지가 화면에서 사라지지 않게 한다.
+ */
+export function errorMessage(err: unknown, fallback: string) {
+  if (err && typeof err === "object" && "message" in err) {
+    const m = (err as { message?: unknown }).message;
+    if (typeof m === "string" && m.trim()) return m;
+  }
+  return fallback;
+}
+
 export type LegalDocuments = Partial<Record<LegalDocType, string>>;
 
 export type LegalReviewRow = {

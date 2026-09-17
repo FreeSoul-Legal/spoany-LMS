@@ -9,6 +9,7 @@ import {
   combineInputWithQA,
   createLegalReview,
   deriveTitle,
+  errorMessage,
   saveLegalReviewDocument,
   toAnalysisResult,
 } from "@/lib/legal-review";
@@ -296,7 +297,7 @@ export function LegalReviewWorkspace({ initial }: { initial?: LegalReviewRow }) 
     try {
       await runClassify([], false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "분석에 실패했습니다.");
+      toast.error(errorMessage(err, "분석에 실패했습니다."));
     } finally {
       setAnalyzing(false);
     }
@@ -312,7 +313,7 @@ export function LegalReviewWorkspace({ initial }: { initial?: LegalReviewRow }) 
       await runClassify(combined, true);
       setQaHistory(combined);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "분석에 실패했습니다.");
+      toast.error(errorMessage(err, "분석에 실패했습니다."));
     } finally {
       setAnalyzing(false);
     }
@@ -329,7 +330,7 @@ export function LegalReviewWorkspace({ initial }: { initial?: LegalReviewRow }) 
       setReview(updated);
       toast.success(`${DOC_TYPE_LABEL[docType]} 작성이 완료되었습니다.`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "문서 작성에 실패했습니다.");
+      toast.error(errorMessage(err, "문서 작성에 실패했습니다."));
     } finally {
       setGenerating((g) => ({ ...g, [docType]: false }));
     }
