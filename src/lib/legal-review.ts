@@ -108,3 +108,9 @@ export async function deleteLegalReview(id: string) {
   const { error } = await supabase.from("legal_reviews").delete().eq("id", id);
   if (error) throw error;
 }
+
+export async function updateLegalReviewTitle(id: string, title: string) {
+  const { data, error } = await supabase.from("legal_reviews").update({ title }).eq("id", id).select(SELECT_COLUMNS).single();
+  if (error) throw error;
+  return data;
+}

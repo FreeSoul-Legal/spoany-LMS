@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { fetchLegalReviews, fmtDateTime } from "@/lib/legal-review";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { errorMessage, fetchLegalReviews, fmtDateTime, updateLegalReviewTitle } from "@/lib/legal-review";
 import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export const Route = createFileRoute("/history/")({
   head: () => ({
@@ -15,7 +18,35 @@ export const Route = createFileRoute("/history/")({
 });
 
 function HistoryListPage() {
+  const qc = useQueryClient();
   const { data: reviews, isLoading } = useQuery({ queryKey: ["legal-reviews"], queryFn: fetchLegalReviews });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+
+  function startEdit(id: string, currentTitle: string) {
+    setEditingId(id);
+    setEditValue(currentTitle);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditValue("");
+  }
+
+  async function saveEdit(id: string) {
+    const title = editValue.trim();
+    if (!title) {
+      toast.error("이름을 입력해주세요.");
+      return;
+    }
+    try {
+      await updateLegalReviewTitle(id, title);
+      cancelEdit();
+      qc.invalidateQueries({ queryKey: ["legal-reviews"] });
+    } catch (err) {
+      toast.error(errorMessage(err, "이름 변경에 실패했습니다."));
+    }
+  }
 
   return (
     <div className="min-h-screen bg-muted/60">
@@ -38,21 +69,50 @@ function HistoryListPage() {
             <p className="px-4 py-6 text-center text-sm text-muted-foreground">검토한 사안이 없습니다.</p>
           ) : (
             reviews.map((r) => (
-              <Link
-                key={r.id}
-                to="/history/$id"
-                params={{ id: r.id }}
-                className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-muted/50"
-              >
+              <div key={r.id} className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-muted/50">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{r.title}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{fmtDateTime(r.created_at)}</p>
+                  {editingId === r.id ? (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        autoFocus
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveEdit(r.id);
+                          if (e.key === "Escape") cancelEdit();
+                        }}
+                        className="h-8 text-sm"
+                      />
+                      <Button size="sm" onClick={() => saveEdit(r.id)}>
+                        저장
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={cancelEdit}>
+                        취소
+                      </Button>
+                    </div>
+                  ) : (
+                    <Link to="/history/$id" params={{ id: r.id }} className="block">
+                      <p className="truncate text-sm font-medium">{r.title}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{fmtDateTime(r.created_at)}</p>
+                    </Link>
+                  )}
                 </div>
-                <div className="flex shrink-0 gap-1 text-xs text-muted-foreground">
-                  {r.analysis?.caseTypes.criminal && <span className="rounded bg-muted px-2 py-0.5">형사</span>}
-                  {r.analysis?.caseTypes.civil && <span className="rounded bg-muted px-2 py-0.5">민사</span>}
-                </div>
-              </Link>
+                {editingId !== r.id && (
+                  <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                    {r.analysis?.caseTypes.criminal && <span className="rounded bg-muted px-2 py-0.5">형사</span>}
+                    {r.analysis?.caseTypes.civil && <span className="rounded bg-muted px-2 py-0.5">민사</span>}
+                    <button
+                      type="button"
+                      onClick={() => startEdit(r.id, r.title)}
+                      className="rounded px-1.5 py-0.5 text-sm leading-none text-muted-foreground hover:bg-muted hover:text-foreground"
+                      aria-label="이름 변경"
+                      title="이름 변경"
+                    >
+                      ⋯
+                    </button>
+                  </div>
+                )}
+              </div>
             ))
           )}
         </section>
