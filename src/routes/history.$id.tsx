@@ -7,7 +7,7 @@ import { LegalReviewWorkspace } from "@/components/LegalReviewWorkspace";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/history/$id")({
-  head: () => ({ meta: [{ title: "검토 상세 · 사안 검토 시스템" }] }),
+  head: () => ({ meta: [{ title: "검토 상세 · 민형사 검토 시스템" }] }),
   component: HistoryDetailPage,
 });
 

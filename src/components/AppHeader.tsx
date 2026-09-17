@@ -8,11 +8,11 @@ export function AppHeader() {
     <header className="bg-header text-header-foreground">
       <div className="mx-auto flex h-14 w-full max-w-[1200px] items-center gap-6 px-6">
         <Link to="/" className="flex items-baseline gap-2">
-          <span className="text-lg font-bold tracking-tight">사안 검토 시스템</span>
+          <span className="text-lg font-bold tracking-tight">민형사 검토 시스템</span>
         </Link>
         <nav className="flex items-center gap-1 text-sm">
           <Link to="/" className={linkClass} activeProps={activeClass} activeOptions={{ exact: true }}>
-            새 사안 검토
+            신규 검토
           </Link>
           <Link to="/history" className={linkClass} activeProps={activeClass}>
             검토 이력

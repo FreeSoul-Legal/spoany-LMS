@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 export const Route = createFileRoute("/history/")({
   head: () => ({
     meta: [
-      { title: "검토 이력 · 사안 검토 시스템" },
+      { title: "검토 이력 · 민형사 검토 시스템" },
       { name: "description", content: "지금까지 분석한 사안과 작성한 보고서·서면을 다시 확인합니다." },
     ],
   }),
@@ -27,7 +27,7 @@ function HistoryListPage() {
             <p className="mt-1 text-sm text-muted-foreground">지금까지 분석한 사안과 작성한 보고서·서면을 다시 확인할 수 있습니다.</p>
           </div>
           <Button asChild size="sm">
-            <Link to="/">새 사안 검토</Link>
+            <Link to="/">신규 검토</Link>
           </Button>
         </div>
 

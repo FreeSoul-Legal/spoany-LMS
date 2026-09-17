@@ -359,7 +359,7 @@ export function LegalReviewWorkspace({ initial }: { initial?: LegalReviewRow }) 
         <div className="mt-3 flex justify-end gap-2">
           {(review || pendingQuestions) && (
             <Button variant="outline" size="sm" onClick={reset}>
-              새 사안 검토
+              신규 검토
             </Button>
           )}
           {!review && !pendingQuestions && (
