@@ -352,7 +352,7 @@ export function LegalReviewWorkspace({ initial }: { initial?: LegalReviewRow }) 
           rows={8}
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          placeholder="직영점/부서에서 검토를 요청한 사안의 경위, 관련자, 일시, 손해 내용 등을 육하원칙에 따라 최대한 구체적으로 입력해주세요."
+          placeholder="검토를 요청한 사안의 경위, 관련자, 일시, 손해 내용 등을 육하원칙에 따라 최대한 구체적으로 입력해주세요."
           className="mt-2"
           disabled={!!review || !!pendingQuestions}
         />
