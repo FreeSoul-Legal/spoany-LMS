@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppHeader } from "@/components/AppHeader";
 import { LegalReviewWorkspace } from "@/components/LegalReviewWorkspace";
+import { PasscodeScreen } from "@/components/PasscodeScreen";
+import { usePasscodeGate } from "@/lib/access";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -16,9 +18,14 @@ export const Route = createFileRoute("/")({
 });
 
 function IndexPage() {
+  const { role, ready, setRole, signOut } = usePasscodeGate();
+
+  if (!ready) return null;
+  if (!role) return <PasscodeScreen onVerified={setRole} />;
+
   return (
     <div className="min-h-screen bg-muted/60">
-      <AppHeader />
+      <AppHeader role={role} onSignOut={signOut} />
       <main className="mx-auto w-full max-w-4xl px-6 py-6">
         <h1 className="text-lg font-bold">사안 검토</h1>
         <p className="mt-1 text-sm text-muted-foreground">

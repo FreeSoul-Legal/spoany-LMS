@@ -4,8 +4,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { errorMessage, fetchLegalReviews, fmtDateTime, updateLegalReviewTitle } from "@/lib/legal-review";
 import { AppHeader } from "@/components/AppHeader";
+import { PasscodeScreen } from "@/components/PasscodeScreen";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { usePasscodeGate } from "@/lib/access";
 
 export const Route = createFileRoute("/history/")({
   head: () => ({
@@ -19,7 +21,12 @@ export const Route = createFileRoute("/history/")({
 
 function HistoryListPage() {
   const qc = useQueryClient();
-  const { data: reviews, isLoading } = useQuery({ queryKey: ["legal-reviews"], queryFn: fetchLegalReviews });
+  const { role, ready, setRole, signOut } = usePasscodeGate();
+  const { data: reviews, isLoading } = useQuery({
+    queryKey: ["legal-reviews"],
+    queryFn: fetchLegalReviews,
+    enabled: role === "admin",
+  });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
 
@@ -48,9 +55,28 @@ function HistoryListPage() {
     }
   }
 
+  if (!ready) return null;
+  if (!role) return <PasscodeScreen onVerified={setRole} />;
+
+  if (role !== "admin") {
+    return (
+      <div className="min-h-screen bg-muted/60">
+        <AppHeader role={role} onSignOut={signOut} />
+        <main className="p-10 text-center text-muted-foreground">
+          검토 이력은 관리자만 접근할 수 있습니다.
+          <div className="mt-4">
+            <Button asChild variant="outline" size="sm">
+              <Link to="/">신규 검토로 이동</Link>
+            </Button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-muted/60">
-      <AppHeader />
+      <AppHeader role={role} onSignOut={signOut} />
       <main className="mx-auto w-full max-w-4xl px-6 py-6">
         <div className="flex items-center justify-between">
           <div>

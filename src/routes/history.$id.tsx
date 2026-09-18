@@ -4,7 +4,9 @@ import { toast } from "sonner";
 import { fetchLegalReview, deleteLegalReview, fmtDateTime } from "@/lib/legal-review";
 import { AppHeader } from "@/components/AppHeader";
 import { LegalReviewWorkspace } from "@/components/LegalReviewWorkspace";
+import { PasscodeScreen } from "@/components/PasscodeScreen";
 import { Button } from "@/components/ui/button";
+import { usePasscodeGate } from "@/lib/access";
 
 export const Route = createFileRoute("/history/$id")({
   head: () => ({ meta: [{ title: "검토 상세 · 민형사 검토 시스템" }] }),
@@ -14,10 +16,31 @@ export const Route = createFileRoute("/history/$id")({
 function HistoryDetailPage() {
   const { id } = useParams({ from: "/history/$id" });
   const navigate = useNavigate();
+  const { role, ready, setRole, signOut } = usePasscodeGate();
   const { data: review, isLoading } = useQuery({
     queryKey: ["legal-review", id],
     queryFn: () => fetchLegalReview(id),
+    enabled: role === "admin",
   });
+
+  if (!ready) return null;
+  if (!role) return <PasscodeScreen onVerified={setRole} />;
+
+  if (role !== "admin") {
+    return (
+      <div className="min-h-screen bg-muted/60">
+        <AppHeader role={role} onSignOut={signOut} />
+        <main className="p-10 text-center text-muted-foreground">
+          검토 이력은 관리자만 접근할 수 있습니다.
+          <div className="mt-4">
+            <Button asChild variant="outline" size="sm">
+              <Link to="/">신규 검토로 이동</Link>
+            </Button>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   if (isLoading) return <main className="p-10 text-center text-muted-foreground">불러오는 중…</main>;
 
@@ -47,7 +70,7 @@ function HistoryDetailPage() {
 
   return (
     <div className="min-h-screen bg-muted/60">
-      <AppHeader />
+      <AppHeader role={role} onSignOut={signOut} />
       <main className="mx-auto w-full max-w-4xl px-6 py-6">
         <div className="no-print flex items-center justify-between gap-4">
           <div className="min-w-0">
