@@ -1,7 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-type ClaudeMessage = { role: "user" | "assistant"; content: string };
+type ClaudeContentBlock =
+  | { type: "text"; text: string }
+  | { type: "image"; source: { type: "base64"; media_type: string; data: string } }
+  | { type: "document"; source: { type: "base64"; media_type: string; data: string } };
+
+type ClaudeMessage = { role: "user" | "assistant"; content: string | ClaudeContentBlock[] };
 
 async function callClaude(system: string, messages: ClaudeMessage[], maxTokens = 4096): Promise<string> {
   const apiKey = process.env["ANTHROPIC_API_KEY"];
@@ -83,6 +88,18 @@ export type AnalysisResult = z.infer<typeof analysisResultSchema>;
 
 export type QAPair = { question: string; answer: string };
 
+const ATTACHMENT_MEDIA_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf", "text/plain"] as const;
+// base64는 원본 대비 약 1.37배로 늘어난다. 원본 파일 10MB 기준의 여유 있는 상한.
+const MAX_ATTACHMENT_BASE64_LENGTH = 14_000_000;
+
+const attachmentSchema = z.object({
+  name: z.string().min(1).max(200),
+  mediaType: z.enum(ATTACHMENT_MEDIA_TYPES),
+  data: z.string().min(1).max(MAX_ATTACHMENT_BASE64_LENGTH),
+});
+
+export type CaseAttachment = z.infer<typeof attachmentSchema>;
+
 const classifyResponseSchema = z.discriminatedUnion("status", [
   z.object({ status: z.literal("need_more_info"), questions: z.array(z.string().min(1)).min(1).max(4) }),
   z.object({ status: z.literal("complete") }).extend(analysisResultSchema.shape),
@@ -91,6 +108,7 @@ const classifyResponseSchema = z.discriminatedUnion("status", [
 export type ClassifyResponse = z.infer<typeof classifyResponseSchema>;
 
 const CLASSIFY_SYSTEM = `당신은 15년 이상 경력의 대한민국 법률전문가입니다. 회사(헬스장 직영점 및 본사 각 부서)에서 검토를 요청한 사안을 분석합니다.
+사진, PDF, 텍스트 파일 등 증거자료가 첨부될 수 있으며, 첨부된 자료의 내용도 반드시 사실관계 판단의 근거로 함께 검토하세요.
 다음 원칙을 지키세요.
 - 결론을 먼저 명확히 제시하고, 근거는 간결하게 제시합니다.
 - 격식 있는 문어체를 사용하고 반말을 쓰지 않습니다.
@@ -127,15 +145,38 @@ const CLASSIFY_SYSTEM = `당신은 15년 이상 경력의 대한민국 법률전
   } | null
 }`;
 
-function buildCaseMessage(inputText: string, qaHistory: QAPair[], forceComplete: boolean) {
-  let content = `검토 요청 사안:\n\n${inputText}`;
+function buildCaseMessage(
+  inputText: string,
+  qaHistory: QAPair[],
+  forceComplete: boolean,
+  attachments: CaseAttachment[],
+): ClaudeContentBlock[] {
+  let text = `검토 요청 사안:\n\n${inputText}`;
   if (qaHistory.length > 0) {
-    content += `\n\n[추가 확인 사항]\n${qaHistory.map((qa) => `Q: ${qa.question}\nA: ${qa.answer}`).join("\n\n")}`;
+    text += `\n\n[추가 확인 사항]\n${qaHistory.map((qa) => `Q: ${qa.question}\nA: ${qa.answer}`).join("\n\n")}`;
+  }
+
+  const blocks: ClaudeContentBlock[] = [];
+  let hasBinaryAttachment = false;
+  for (const a of attachments) {
+    if (a.mediaType === "text/plain") {
+      text += `\n\n[첨부파일: ${a.name}]\n${Buffer.from(a.data, "base64").toString("utf-8")}`;
+    } else if (a.mediaType === "application/pdf") {
+      blocks.push({ type: "document", source: { type: "base64", media_type: a.mediaType, data: a.data } });
+      hasBinaryAttachment = true;
+    } else {
+      blocks.push({ type: "image", source: { type: "base64", media_type: a.mediaType, data: a.data } });
+      hasBinaryAttachment = true;
+    }
+  }
+  if (hasBinaryAttachment) {
+    text += `\n\n[첨부파일이 함께 제공되었습니다. 첨부파일의 내용도 사실관계 판단에 반드시 참고하세요.]`;
   }
   if (forceComplete) {
-    content += `\n\n(안내: 이미 한 차례 추가 질문을 드렸습니다. 지금까지 확인된 사실관계만으로 반드시 "complete" 상태의 최종 판단을 내려주세요. 더 이상 질문하지 마세요.)`;
+    text += `\n\n(안내: 이미 한 차례 추가 질문을 드렸습니다. 지금까지 확인된 사실관계만으로 반드시 "complete" 상태의 최종 판단을 내려주세요. 더 이상 질문하지 마세요.)`;
   }
-  return content;
+  blocks.push({ type: "text", text });
+  return blocks;
 }
 
 export const classifyLegalCase = createServerFn({ method: "POST" })
@@ -145,6 +186,7 @@ export const classifyLegalCase = createServerFn({ method: "POST" })
         inputText: z.string().min(10).max(8000),
         qaHistory: z.array(z.object({ question: z.string(), answer: z.string() })).max(8).default([]),
         forceComplete: z.boolean().default(false),
+        attachments: z.array(attachmentSchema).max(5).default([]),
       })
       .parse(data),
   )
@@ -153,7 +195,7 @@ export const classifyLegalCase = createServerFn({ method: "POST" })
     // 기본값(4096)보다 넉넉하게 잡는다. 실제로 쓴 만큼만 과금되므로 상한을 올려도 비용 부담은 없다.
     const text = await callClaude(
       CLASSIFY_SYSTEM,
-      [{ role: "user", content: buildCaseMessage(data.inputText, data.qaHistory, data.forceComplete) }],
+      [{ role: "user", content: buildCaseMessage(data.inputText, data.qaHistory, data.forceComplete, data.attachments) }],
       8000,
     );
     try {

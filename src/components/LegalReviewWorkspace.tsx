@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,7 +13,38 @@ import {
   saveLegalReviewDocument,
   toAnalysisResult,
 } from "@/lib/legal-review";
-import type { AnalysisResult, LegalDocType, LegalReviewRow, QAPair } from "@/lib/legal-review";
+import type { AnalysisResult, CaseAttachment, LegalDocType, LegalReviewRow, QAPair } from "@/lib/legal-review";
+
+const ATTACHMENT_ACCEPT = "image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain";
+const ATTACHMENT_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf", "text/plain"] as const;
+type AttachmentMediaType = (typeof ATTACHMENT_TYPES)[number];
+const ATTACHMENT_TYPE_LABEL: Record<AttachmentMediaType, string> = {
+  "image/jpeg": "이미지",
+  "image/png": "이미지",
+  "image/webp": "이미지",
+  "image/gif": "이미지",
+  "application/pdf": "PDF",
+  "text/plain": "텍스트",
+};
+const MAX_ATTACHMENTS = 5;
+const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+
+function isAttachmentMediaType(type: string): type is AttachmentMediaType {
+  return (ATTACHMENT_TYPES as readonly string[]).includes(type);
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const comma = result.indexOf(",");
+      resolve(comma === -1 ? result : result.slice(comma + 1));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("파일을 읽지 못했습니다."));
+    reader.readAsDataURL(file);
+  });
+}
 
 /** body.printing 클래스가 있을 때 이 포탈 내용만 보이도록 styles.css에서 처리한다. */
 function usePrint() {
@@ -272,10 +303,43 @@ export function LegalReviewWorkspace({ initial }: { initial?: LegalReviewRow }) 
   const [qaHistory, setQaHistory] = useState<QAPair[]>([]);
   const [pendingQuestions, setPendingQuestions] = useState<string[] | null>(null);
   const [answers, setAnswers] = useState<string[]>([]);
+  const [attachments, setAttachments] = useState<CaseAttachment[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { printDoc, portal } = usePrint();
 
+  async function handleFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (files.length === 0) return;
+    if (attachments.length + files.length > MAX_ATTACHMENTS) {
+      toast.error(`파일은 최대 ${MAX_ATTACHMENTS}개까지 첨부할 수 있습니다.`);
+      return;
+    }
+    for (const file of files) {
+      const mediaType = file.type;
+      if (!isAttachmentMediaType(mediaType)) {
+        toast.error(`지원하지 않는 파일 형식입니다: ${file.name} (이미지, PDF, 텍스트 파일만 가능)`);
+        continue;
+      }
+      if (file.size > MAX_ATTACHMENT_SIZE) {
+        toast.error(`파일 용량이 너무 큽니다(최대 10MB): ${file.name}`);
+        continue;
+      }
+      try {
+        const data = await fileToBase64(file);
+        setAttachments((prev) => [...prev, { name: file.name, mediaType, data }]);
+      } catch {
+        toast.error(`파일을 읽지 못했습니다: ${file.name}`);
+      }
+    }
+  }
+
+  function removeAttachment(index: number) {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  }
+
   async function runClassify(qaSoFar: QAPair[], forceComplete: boolean) {
-    const res = await classifyLegalCase({ data: { inputText, qaHistory: qaSoFar, forceComplete } });
+    const res = await classifyLegalCase({ data: { inputText, qaHistory: qaSoFar, forceComplete, attachments } });
     if (res.status === "need_more_info") {
       setPendingQuestions(res.questions);
       setAnswers(res.questions.map(() => ""));
@@ -342,6 +406,7 @@ export function LegalReviewWorkspace({ initial }: { initial?: LegalReviewRow }) 
     setQaHistory([]);
     setPendingQuestions(null);
     setAnswers([]);
+    setAttachments([]);
   }
 
   return (
@@ -356,6 +421,24 @@ export function LegalReviewWorkspace({ initial }: { initial?: LegalReviewRow }) 
           className="mt-2"
           disabled={!!review || !!pendingQuestions}
         />
+        {!review && !pendingQuestions && attachments.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {attachments.map((a, i) => (
+              <span key={i} className="inline-flex items-center gap-1.5 rounded-full border bg-muted px-3 py-1 text-xs">
+                <span className="max-w-[160px] truncate">{a.name}</span>
+                <span className="text-muted-foreground">({ATTACHMENT_TYPE_LABEL[a.mediaType]})</span>
+                <button
+                  type="button"
+                  onClick={() => removeAttachment(i)}
+                  className="text-muted-foreground hover:text-foreground"
+                  aria-label="첨부 삭제"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
         <div className="mt-3 flex justify-end gap-2">
           {(review || pendingQuestions) && (
             <Button variant="outline" size="sm" onClick={reset}>
@@ -363,9 +446,22 @@ export function LegalReviewWorkspace({ initial }: { initial?: LegalReviewRow }) 
             </Button>
           )}
           {!review && !pendingQuestions && (
-            <Button onClick={handleAnalyze} disabled={analyzing}>
-              {analyzing ? "분석 중…" : "사안 분석하기"}
-            </Button>
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ATTACHMENT_ACCEPT}
+                multiple
+                className="hidden"
+                onChange={handleFilesSelected}
+              />
+              <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={analyzing}>
+                파일첨부
+              </Button>
+              <Button onClick={handleAnalyze} disabled={analyzing}>
+                {analyzing ? "분석 중…" : "사안 분석하기"}
+              </Button>
+            </>
           )}
         </div>
       </section>

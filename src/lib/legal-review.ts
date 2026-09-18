@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase/client";
-import type { AnalysisResult, ClassifyResponse, LegalDocType, QAPair } from "@/lib/legal-review.functions";
+import type { AnalysisResult, CaseAttachment, ClassifyResponse, LegalDocType, QAPair } from "@/lib/legal-review.functions";
 
-export type { AnalysisResult, ClassifyResponse, LegalDocType, QAPair };
+export type { AnalysisResult, CaseAttachment, ClassifyResponse, LegalDocType, QAPair };
 
 /**
  * 서버 함수(RPC)를 넘어온 에러는 `instanceof Error`가 항상 참이라는 보장이 없다
