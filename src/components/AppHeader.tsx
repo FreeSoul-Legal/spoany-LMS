@@ -29,7 +29,7 @@ export function AppHeader({ role, onSignOut }: { role?: Role; onSignOut?: () => 
             onClick={onSignOut}
             className="ml-auto text-header-foreground hover:bg-white/10 hover:text-header-foreground"
           >
-            잠금
+            인증화면
           </Button>
         )}
       </div>
