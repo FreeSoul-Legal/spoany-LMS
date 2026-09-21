@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { errorMessage, fetchLegalReviews, fmtDateTime, updateLegalReviewTitle } from "@/lib/legal-review";
+import { deleteLegalReview, errorMessage, fetchLegalReviews, fmtDateTime, updateLegalReviewTitle } from "@/lib/legal-review";
 import { AppHeader } from "@/components/AppHeader";
 import { PasscodeScreen } from "@/components/PasscodeScreen";
 import { Button } from "@/components/ui/button";
@@ -29,10 +29,24 @@ function HistoryListPage() {
   });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!menuOpenId) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpenId(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [menuOpenId]);
 
   function startEdit(id: string, currentTitle: string) {
     setEditingId(id);
     setEditValue(currentTitle);
+    setMenuOpenId(null);
   }
 
   function cancelEdit() {
@@ -52,6 +66,18 @@ function HistoryListPage() {
       qc.invalidateQueries({ queryKey: ["legal-reviews"] });
     } catch (err) {
       toast.error(errorMessage(err, "이름 변경에 실패했습니다."));
+    }
+  }
+
+  async function handleDelete(id: string) {
+    setMenuOpenId(null);
+    if (!confirm("이 검토 이력을 삭제하시겠습니까? 되돌릴 수 없습니다.")) return;
+    try {
+      await deleteLegalReview(id);
+      qc.invalidateQueries({ queryKey: ["legal-reviews"] });
+      toast.success("삭제되었습니다.");
+    } catch (err) {
+      toast.error(errorMessage(err, "삭제하지 못했습니다."));
     }
   }
 
@@ -124,18 +150,39 @@ function HistoryListPage() {
                   )}
                 </div>
                 {editingId !== r.id && (
-                  <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                  <div className="relative flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
                     {r.analysis?.caseTypes.criminal && <span className="rounded bg-muted px-2 py-0.5">형사</span>}
                     {r.analysis?.caseTypes.civil && <span className="rounded bg-muted px-2 py-0.5">민사</span>}
                     <button
                       type="button"
-                      onClick={() => startEdit(r.id, r.title)}
+                      onClick={() => setMenuOpenId((cur) => (cur === r.id ? null : r.id))}
                       className="rounded px-1.5 py-0.5 text-sm leading-none text-muted-foreground hover:bg-muted hover:text-foreground"
-                      aria-label="이름 변경"
-                      title="이름 변경"
+                      aria-label="더보기"
+                      title="더보기"
                     >
                       ⋯
                     </button>
+                    {menuOpenId === r.id && (
+                      <div
+                        ref={menuRef}
+                        className="absolute right-0 top-full z-10 mt-1 w-28 overflow-hidden rounded-md border bg-popover py-1 text-left shadow-md"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => startEdit(r.id, r.title)}
+                          className="block w-full px-3 py-1.5 text-left text-sm text-foreground hover:bg-muted"
+                        >
+                          이름 변경
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(r.id)}
+                          className="block w-full px-3 py-1.5 text-left text-sm text-destructive hover:bg-muted"
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
