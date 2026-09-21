@@ -12,7 +12,7 @@ import { usePasscodeGate } from "@/lib/access";
 export const Route = createFileRoute("/history/")({
   head: () => ({
     meta: [
-      { title: "검토 이력 · 민형사 검토 시스템" },
+      { title: "검토 이력 · 법률 상담 시스템" },
       { name: "description", content: "지금까지 분석한 사안과 작성한 보고서·서면을 다시 확인합니다." },
     ],
   }),

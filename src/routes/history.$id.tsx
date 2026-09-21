@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { usePasscodeGate } from "@/lib/access";
 
 export const Route = createFileRoute("/history/$id")({
-  head: () => ({ meta: [{ title: "검토 상세 · 민형사 검토 시스템" }] }),
+  head: () => ({ meta: [{ title: "검토 상세 · 법률 상담 시스템" }] }),
   component: HistoryDetailPage,
 });
 

@@ -32,7 +32,7 @@ export function PasscodeScreen({ onVerified }: { onVerified: (role: Role) => voi
             />
           </svg>
         </div>
-        <h1 className="mt-4 text-lg font-bold">민형사 검토 시스템</h1>
+        <h1 className="mt-4 text-lg font-bold">법률 상담 시스템</h1>
         <p className="mt-1 text-sm text-muted-foreground">시스템에 접속하려면 인증이 필요합니다</p>
 
         <form onSubmit={submit} className="mt-6 space-y-3">
