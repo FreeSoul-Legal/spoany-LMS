@@ -194,10 +194,16 @@ function CaseSection({
 }) {
   const reportType: LegalDocType = type === "criminal" ? "criminal_report" : "civil_report";
   const basisLabel = type === "criminal" ? "죄명 및 관련 근거" : "관련 근거";
+  const isClaimant = data.role === "claimant";
+  const roleLabel =
+    type === "criminal" ? (isClaimant ? "피해자(고소인) 입장" : "피의자(피고소인) 입장") : isClaimant ? "원고 입장" : "피고 입장";
 
   return (
     <section className="rounded-lg border bg-card p-4">
-      <h2 className="text-sm font-semibold">{type === "criminal" ? "형사사건 검토" : "민사사건 검토"}</h2>
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="text-sm font-semibold">{type === "criminal" ? "형사사건 검토" : "민사사건 검토"}</h2>
+        <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{roleLabel}</span>
+      </div>
 
       <div className="mt-3 grid gap-4 sm:grid-cols-[180px_1fr]">
         <LevelChecklist type={type} level={data.level} />
@@ -219,20 +225,35 @@ function CaseSection({
         <div className="mt-4 border-t pt-4">
           <p className="text-sm font-medium">
             {type === "criminal"
-              ? "처벌가능성이 높다고 판단됩니다. 고소장을 작성하시겠습니까?"
-              : "승소가능성이 높다고 판단됩니다. 소장을 작성하시겠습니까? 내용증명을 작성하시겠습니까?"}
+              ? isClaimant
+                ? "처벌가능성이 높다고 판단됩니다. 고소장을 작성하시겠습니까?"
+                : "처벌가능성이 높다고 판단됩니다. 의견서(형사)를 작성하시겠습니까?"
+              : isClaimant
+                ? "승소가능성이 높다고 판단됩니다. 소장을 작성하시겠습니까? 내용증명을 작성하시겠습니까?"
+                : "승소가능성이 높다고 판단됩니다. 답변서(민사)를 작성하시겠습니까?"}
           </p>
           <div className="mt-3 space-y-3">
             {type === "criminal" ? (
-              <GeneratedDocBlock
-                label="고소장"
-                buttonLabel="고소장 작성"
-                content={review.documents.criminal_complaint}
-                generating={!!generating.criminal_complaint}
-                onGenerate={() => onGenerate("criminal_complaint")}
-                onPrint={() => printDoc("고소장", review.documents.criminal_complaint ?? "")}
-              />
-            ) : (
+              isClaimant ? (
+                <GeneratedDocBlock
+                  label="고소장"
+                  buttonLabel="고소장 작성"
+                  content={review.documents.criminal_complaint}
+                  generating={!!generating.criminal_complaint}
+                  onGenerate={() => onGenerate("criminal_complaint")}
+                  onPrint={() => printDoc("고소장", review.documents.criminal_complaint ?? "")}
+                />
+              ) : (
+                <GeneratedDocBlock
+                  label="의견서(형사)"
+                  buttonLabel="의견서 작성"
+                  content={review.documents.criminal_opinion}
+                  generating={!!generating.criminal_opinion}
+                  onGenerate={() => onGenerate("criminal_opinion")}
+                  onPrint={() => printDoc("의견서(형사)", review.documents.criminal_opinion ?? "")}
+                />
+              )
+            ) : isClaimant ? (
               <>
                 <GeneratedDocBlock
                   label="소장(민사)"
@@ -251,6 +272,15 @@ function CaseSection({
                   onPrint={() => printDoc("내용증명", review.documents.content_cert ?? "")}
                 />
               </>
+            ) : (
+              <GeneratedDocBlock
+                label="답변서(민사)"
+                buttonLabel="답변서 작성"
+                content={review.documents.civil_answer}
+                generating={!!generating.civil_answer}
+                onGenerate={() => onGenerate("civil_answer")}
+                onPrint={() => printDoc("답변서(민사)", review.documents.civil_answer ?? "")}
+              />
             )}
           </div>
         </div>

@@ -65,9 +65,14 @@ function extractJson(text: string): unknown {
 
 const levelSchema = z.enum(["high", "dispute", "low"]);
 
+// claimant: 형사=피해자(고소인), 민사=원고 - 검토를 요청한 당사자가 상대방에게 조치를 취하는 입장
+// respondent: 형사=피의자(피고소인), 민사=피고 - 검토를 요청한 당사자가 상대방으로부터 조치를 받는 입장
+const partyRoleSchema = z.enum(["claimant", "respondent"]);
+
 const caseAssessmentSchema = z.object({
   applicable: z.boolean(),
   level: levelSchema,
+  role: partyRoleSchema,
   facts: z.string(),
   basis: z.string(),
   explanation: z.string(),
@@ -132,6 +137,7 @@ const CLASSIFY_SYSTEM = `당신은 15년 이상 경력의 대한민국 법률전
   "criminal": {                    // caseTypes.criminal이 false면 null
     "applicable": true,
     "level": "high" | "dispute" | "low",  // high=처벌가능성 높음, dispute=다툼의 여지가 있음, low=처벌이 안 될 가능성이 높음
+    "role": "claimant" | "respondent",    // 검토를 요청한 당사자(회사·직영점·본사 부서 등)가 형사적으로 어느 위치인지. claimant=피해자(고소인) 입장, respondent=피의자(피고소인) 입장
     "facts": string,               // 사실관계 간단 요약
     "basis": string,               // 죄명 및 관련 법조문(예: 형법 제355조 횡령 등) 근거
     "explanation": string          // 구체적 설명(왜 그 level인지, 입증 포인트, 유의사항)
@@ -139,11 +145,14 @@ const CLASSIFY_SYSTEM = `당신은 15년 이상 경력의 대한민국 법률전
   "civil": {                       // caseTypes.civil이 false면 null
     "applicable": true,
     "level": "high" | "dispute" | "low",  // high=승소가능성 높음, dispute=다툼의 여지가 있음, low=패소가능성이 높음
+    "role": "claimant" | "respondent",    // 검토를 요청한 당사자가 민사적으로 어느 위치인지. claimant=원고 입장, respondent=피고 입장
     "facts": string,               // 사실관계 간단 요약
     "basis": string,               // 관련 법률 근거(민법 조문, 관련 판례 등)
     "explanation": string          // 구체적 설명
   } | null
-}`;
+}
+
+당사자 위치(role) 판단 기준: 검토를 요청한 당사자(회사·헬스장 직영점·본사 부서 등)를 기준으로, 그쪽이 손해를 입거나 권리를 침해당해 상대방에게 책임을 묻는 입장이면 "claimant", 반대로 상대방으로부터 책임 추궁·고소·소제기를 받거나 받을 가능성이 있는 입장이면 "respondent"로 판단하세요.`;
 
 function buildCaseMessage(
   inputText: string,
@@ -209,7 +218,14 @@ export const classifyLegalCase = createServerFn({ method: "POST" })
     }
   });
 
-export type LegalDocType = "criminal_report" | "civil_report" | "criminal_complaint" | "civil_complaint" | "content_cert";
+export type LegalDocType =
+  | "criminal_report"
+  | "civil_report"
+  | "criminal_complaint"
+  | "civil_complaint"
+  | "content_cert"
+  | "criminal_opinion"
+  | "civil_answer";
 
 const DOC_INSTRUCTIONS: Record<LegalDocType, string> = {
   criminal_report: `A4 한 장 분량의 "형사사건 검토보고서"를 작성하세요.
@@ -218,14 +234,20 @@ const DOC_INSTRUCTIONS: Record<LegalDocType, string> = {
   civil_report: `A4 한 장 분량의 "민사사건 검토보고서"를 작성하세요.
 구성: 제목 / 1. 사실관계(간단 요약) / 2. 관련 근거(법률·판례) / 3. 승소가능성 판단(높음·다툼의 여지·낮음 중 해당 결론과 이유) / 4. 검토의견 및 향후 조치 제안.
 분량은 A4 1장을 넘지 않도록 핵심만 간결하게 작성하세요.`,
-  criminal_complaint: `대한민국 경찰서/검찰청에 제출하는 정식 "고소장" 서식을 작성하세요.
+  criminal_complaint: `대한민국 경찰서/검찰청에 제출하는 정식 "고소장" 서식을 작성하세요. (검토를 요청한 당사자가 피해자·고소인인 경우)
 구성: 고소장 제목 / 고소인 인적사항(성명·주민등록번호·주소·연락처는 "○○○" 등 괄호 안 안내 문구로 기재란만 표시) / 피고소인 인적사항(동일하게 기재란 표시) / 고소취지 / 고소사실(육하원칙에 따른 서술) / 적용법조 / 증거자료 / 관련사건의 수사 및 재판 여부 / 작성 연월일 / 고소인 (인) 순서로 작성하세요.
 사실관계에 없는 구체적 인적사항·일시·금액 등은 임의로 지어내지 말고 "[ ]" 표시로 기재란을 남겨두세요.`,
-  civil_complaint: `대한민국 법원에 제출하는 정식 민사 "소장" 서식을 작성하세요.
+  civil_complaint: `대한민국 법원에 제출하는 정식 민사 "소장" 서식을 작성하세요. (검토를 요청한 당사자가 원고인 경우)
 구성: 소장 제목 / 원고·피고 인적사항(기재란은 "[ ]"로 표시) / 사건명 / 청구취지 / 청구원인(육하원칙 서술, 관련 법률상 근거 포함) / 입증방법 / 첨부서류 / 작성 연월일 / 원고 (인), 관할법원 표시 순서로 작성하세요.
 사실관계에 없는 구체적 인적사항·일시·금액 등은 임의로 지어내지 말고 "[ ]" 표시로 기재란을 남겨두세요.`,
   content_cert: `상대방에게 발송할 "내용증명" 우편 서식을 작성하세요.
 구성: 제목(내용증명) / 발신인·수신인 표시(기재란은 "[ ]"로 표시) / 본문(사실관계 정리, 상대방의 의무 위반 또는 요청 사항 특정, 이행 요구 및 기한, 불이행 시 조치 예고) / 작성 연월일 / 발신인 (인) 순서로 격식 있는 문어체로 작성하세요.`,
+  criminal_opinion: `경찰서/검찰청에 제출하는 "의견서(형사)"를 작성하세요. (검토를 요청한 당사자가 피의자·피고소인인 경우, 사실관계에 대한 해명과 정상참작 사유·법리적 반박을 담은 문서)
+구성: 의견서 제목 / 제출인(피의자) 인적사항(기재란은 "[ ]"로 표시) / 사건번호 및 사건명(기재란은 "[ ]"로 표시) / 의견의 요지 / 구체적 의견(사실관계에 대한 해명·반박, 정상참작 사유, 법리적 주장) / 첨부자료 / 작성 연월일 / 제출인 (인) 순서로 작성하세요.
+사실관계에 없는 구체적 인적사항·일시·금액 등은 임의로 지어내지 말고 "[ ]" 표시로 기재란을 남겨두세요.`,
+  civil_answer: `법원에 제출하는 민사 "답변서"를 작성하세요. (검토를 요청한 당사자가 피고인 경우, 원고의 청구에 대해 인부하고 반박하는 문서)
+구성: 답변서 제목 / 사건번호 및 사건명(기재란은 "[ ]"로 표시) / 원고·피고 인적사항(기재란은 "[ ]"로 표시) / 청구취지에 대한 답변 / 청구원인에 대한 답변(원고 주장 사실관계에 대한 인정·부인 및 그 이유) / 답변의 이유(법률상 반박 근거) / 입증방법 / 첨부서류 / 작성 연월일 / 피고 (인), 관할법원 표시 순서로 작성하세요.
+사실관계에 없는 구체적 인적사항·일시·금액 등은 임의로 지어내지 말고 "[ ]" 표시로 기재란을 남겨두세요.`,
 };
 
 export const generateLegalDocument = createServerFn({ method: "POST" })
@@ -234,7 +256,15 @@ export const generateLegalDocument = createServerFn({ method: "POST" })
       .object({
         inputText: z.string().min(10).max(8000),
         analysis: analysisResultSchema,
-        docType: z.enum(["criminal_report", "civil_report", "criminal_complaint", "civil_complaint", "content_cert"]),
+        docType: z.enum([
+          "criminal_report",
+          "civil_report",
+          "criminal_complaint",
+          "civil_complaint",
+          "content_cert",
+          "criminal_opinion",
+          "civil_answer",
+        ]),
       })
       .parse(data),
   )

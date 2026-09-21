@@ -47,6 +47,8 @@ export const DOC_TYPE_LABEL: Record<LegalDocType, string> = {
   criminal_complaint: "고소장",
   civil_complaint: "소장(민사)",
   content_cert: "내용증명",
+  criminal_opinion: "의견서(형사)",
+  civil_answer: "답변서(민사)",
 };
 
 export function deriveTitle(inputText: string) {
