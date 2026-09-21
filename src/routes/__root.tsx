@@ -1,6 +1,7 @@
 import { HeadContent, Scripts, createRootRouteWithContext } from "@tanstack/react-router";
 import { Toaster } from "sonner";
 
+import { PasscodeGateProvider } from "@/lib/access";
 import appCss from "../styles.css?url";
 
 import type { QueryClient } from "@tanstack/react-query";
@@ -32,7 +33,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        {children}
+        <PasscodeGateProvider>{children}</PasscodeGateProvider>
         <Toaster richColors position="top-center" />
         <Scripts />
       </body>

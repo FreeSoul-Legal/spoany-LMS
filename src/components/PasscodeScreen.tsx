@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { setStoredRole, verifyPasscode } from "@/lib/access";
+import { verifyPasscode } from "@/lib/access";
 import type { Role } from "@/lib/access";
 
 export function PasscodeScreen({ onVerified }: { onVerified: (role: Role) => void }) {
@@ -15,7 +15,6 @@ export function PasscodeScreen({ onVerified }: { onVerified: (role: Role) => voi
       setError(true);
       return;
     }
-    setStoredRole(role);
     onVerified(role);
   }
 
