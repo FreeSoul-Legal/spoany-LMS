@@ -21,7 +21,10 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
         content: "직영점·본사 부서 검토 요청 사안의 형사·민사 진행 가능성을 분석하고 서면 초안을 작성합니다.",
       },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "stylesheet", href: appCss },
+      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+    ],
   }),
   shellComponent: RootDocument,
 });
